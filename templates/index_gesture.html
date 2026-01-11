@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手势检测</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 25px;
+            gap: 25px;
+        }
+        
+        .video-section {
+            flex: 3;
+            min-width: 300px;
+        }
+        
+        .control-section {
+            flex: 1;
+            min-width: 300px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .video-container {
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-feed {
+            width: 100%;
+            display: block;
+            min-height: 480px;
+            background-color: #111;
+        }
+        
+        .video-placeholder {
+            width: 100%;
+            height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(45deg, #222, #444);
+            color: #aaa;
+            font-size: 1.2em;
+        }
+        
+        .video-info {
+            padding: 15px;
+            background-color: #f1f3f4;
+            border-top: 2px solid #e1e5e9;
+            font-size: 0.9em;
+            color: #555;
+        }
+        
+        .detection-info {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .detection-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .detection-item {
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #4b6cb7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .detection-confidence {
+            background-color: #4b6cb7;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #eaeaea;
+        }
+        
+        .camera-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .camera-btn {
+            padding: 12px;
+            background-color: #e9ecef;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        .camera-btn:hover {
+            background-color: #d0d7de;
+            transform: translateY(-2px);
+        }
+        
+        .camera-btn.active {
+            background-color: #4b6cb7;
+            color: white;
+            border-color: #4b6cb7;
+        }
+        
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #4b6cb7;
+            color: white;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        
+        .btn-primary:hover {
+            background-color: #3a5ca9;
+            transform: translateY(-2px);
+            box-shadow: 0 7px 14px rgba(74, 108, 183, 0.2);
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+            width: 100%;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 7px 14px rgba(231, 76, 60, 0.2);
+        }
+        
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #219653;
+        }
+        
+        .config-group {
+            margin-top: 20px;
+        }
+        
+        .slider-container {
+            margin-bottom: 20px;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .slider-value {
+            color: #4b6cb7;
+            font-weight: 600;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4b6cb7;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: #27ae60;
+            box-shadow: 0 0 10px #27ae60;
+        }
+        
+        .status-offline {
+            background-color: #e74c3c;
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-value {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: #4b6cb7;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+            border-top: 1px solid #eee;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .video-container {
+                height: auto;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+        }
+        
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            z-index: 10;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .category-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+    <script src="/static/inc/jquery.min.js"></script>
+    <script src="/static/inc/ajax.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>手势实时检测</h1>
+            <div class="subtitle">基于 MediaPipe 的实时视频流手势识别</div>
+        </header>
+        
+        <div class="main-content">
+            <!-- 视频显示区域 -->
+            <div class="video-section">
+                <div class="video-container">
+                    <div class="loading" id="loadingIndicator">
+                        <span>正在加载摄像头...</span>
+                    </div>
+                    <img id="videoFeed" class="video-feed" src="" alt="实时视频流">
+                    <div class="video-info">
+                        <div>摄像头 ID: <span id="currentCamera">0</span></div>
+                        <div>状态: 
+                            <span class="status-indicator status-offline" id="statusIndicator"></span>
+                            <span id="statusText">未连接</span>
+                        </div>
+                        <div>检测目标数: <span id="detectionCount">0</span></div>
+                        <div>最后更新: <span id="lastUpdate">-</span></div>
+                    </div>
+                </div>
+                
+                <div class="detection-info">
+                    <h3>检测结果</h3>
+                    <div class="detection-list" id="detectionList">
+                        <div class="detection-item">
+                            <div>等待摄像头启动...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 控制面板区域 -->
+            <div class="control-section">
+                <div class="control-group">
+                    <div class="control-title">摄像头控制</div>
+                    
+                    <div class="camera-selector" id="cameraSelector">
+                        <!-- 摄像头按钮将通过JavaScript动态生成 -->
+                    </div>
+                    
+                    <button class="btn btn-primary" id="startCameraBtn">
+                        <span>启动摄像头</span>
+                    </button>
+                    
+                    <button class="btn btn-danger" id="stopCameraBtn">
+                        <span>停止摄像头</span>
+                    </button>
+                    
+                    <div class="stats-container">
+                        <div class="stat-card">
+                            <div class="stat-value" id="fpsCounter">0</div>
+                            <div class="stat-label">FPS</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="detectionCounter">0</div>
+                            <div class="stat-label">检测数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalDetections">0</div>
+                            <div class="stat-label">总检测</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-title">检测配置</div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>置信度阈值</span>
+                            <span class="slider-value" id="confidenceValue">0.25</span>
+                        </div>
+                        <input type="range" id="confidenceSlider" min="0" max="1" step="0.05" value="0.25">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>检测目标数上限</span>
+                            <span class="slider-value" id="maxDetValue">300</span>
+                        </div>
+                        <input type="range" id="maxDetSlider" min="1" max="500" step="1" value="300">
+                    </div>
+                    
+                    <div class="config-group">
+                        <div class="control-title">检测类别</div>
+                        <div class="category-checkboxes" id="categoryCheckboxes">
+                            <!-- 类别选择框将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-success" id="updateConfigBtn" style="margin-top: 20px;">
+                        <span>更新配置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>手势检测 &copy; 2024 | 基于 MediaPipe + OpenCV</p>
+        </footer>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentCameraId = 0;
+        let isStreaming = false;
+        let fpsCounter = 0;
+        let lastFpsUpdate = Date.now();
+        let totalDetections = 0;
+        let detectionResults = [];
+        
+        // 初始化函数
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化UI组件
+            initCameraSelector();
+            initCategoryCheckboxes();
+            initEventListeners();
+            updateCameraStatus();
+            
+            // 开始更新FPS计数
+            setInterval(updateFps, 1000);
+            
+            // 定期更新检测结果
+            setInterval(updateDetectionResults, 1000);
+        });
+        
+        // 初始化摄像头选择器
+        async function initCameraSelector() {
+            const response = await fetch('./api/cameras/available');
+            const data = await response.json();
+            
+            if (data.success && data.available_cameras.length > 0) {
+                const container = document.getElementById('cameraSelector');
+                container.innerHTML = '';
+                
+                data.available_cameras.forEach(cameraId => {
+                    const button = document.createElement('div');
+                    button.className = 'camera-btn';
+                    button.textContent = `Cam ${cameraId}`;
+                    button.dataset.cameraId = cameraId;
+                    
+                    if (cameraId === 0) {
+                        button.classList.add('active');
+                    }
+                    
+                    button.addEventListener('click', () => {
+                        document.querySelectorAll('.camera-btn').forEach(btn => {
+                            btn.classList.remove('active');
+                        });
+                        button.classList.add('active');
+                        currentCameraId = cameraId;
+                        document.getElementById('currentCamera').textContent = cameraId;
+                        
+                        // 如果正在流式传输，切换到新摄像头
+                        if (isStreaming) {
+                            stopCameraStream();
+                            setTimeout(() => startCameraStream(), 500);
+                        }
+                    });
+                    
+                    container.appendChild(button);
+                });
+            }
+        }
+        
+        // 初始化类别选择框
+        async function initCategoryCheckboxes() {
+            const response = await fetch('./api/categories/list');
+            const data = await response.json();
+            
+            if (data.success) {
+                const container = document.getElementById('categoryCheckboxes');
+                container.innerHTML = '';
+                
+                // 只显示前20个常见类别以简化界面
+                const commonClasses = [
+                    'person', 'car', 'bicycle', 'motorcycle', 'bus', 'truck',
+                    'cat', 'dog', 'bird', 'horse', 'sheep', 'cow',
+                    'chair', 'dining table', 'tv', 'laptop', 'cell phone',
+                    'bottle', 'cup', 'fork'
+                ];
+                
+                commonClasses.forEach(className => {
+                    const index = data.all_classes.indexOf(className);
+                    if (index !== -1) {
+                        const checkboxItem = document.createElement('div');
+                        checkboxItem.className = 'checkbox-item';
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.id = `class_${index}`;
+                        checkbox.value = className;
+                        checkbox.checked = true;
+                        
+                        const label = document.createElement('label');
+                        label.htmlFor = `class_${index}`;
+                        label.textContent = className;
+                        
+                        checkboxItem.appendChild(checkbox);
+                        checkboxItem.appendChild(label);
+                        container.appendChild(checkboxItem);
+                    }
+                });
+            }
+        }
+        
+        // 初始化事件监听器
+        function initEventListeners() {
+            // 启动摄像头按钮
+            document.getElementById('startCameraBtn').addEventListener('click', startCameraStream);
+            
+            // 停止摄像头按钮
+            document.getElementById('stopCameraBtn').addEventListener('click', stopCameraStream);
+            
+            // 更新配置按钮
+            document.getElementById('updateConfigBtn').addEventListener('click', updateConfig);
+            
+            // 置信度滑块
+            const confidenceSlider = document.getElementById('confidenceSlider');
+            confidenceSlider.addEventListener('input', function() {
+                document.getElementById('confidenceValue').textContent = this.value;
+            });
+            
+            // 最大检测数滑块
+            const maxDetSlider = document.getElementById('maxDetSlider');
+            maxDetSlider.addEventListener('input', function() {
+                document.getElementById('maxDetValue').textContent = this.value;
+            });
+            
+            // 视频流错误处理
+            document.getElementById('videoFeed').addEventListener('error', function() {
+                console.error('视频流加载失败');
+                updateCameraStatus(false);
+            });
+            
+            // 视频流加载完成
+            document.getElementById('videoFeed').addEventListener('load', function() {
+                console.log('视频流加载成功');
+                updateCameraStatus(true);
+            });
+        }
+        
+        // 启动摄像头流
+        async function startCameraStream() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.classList.add('active');
+            
+            const confidence = parseFloat(document.getElementById('confidenceSlider').value);
+            const maxDet = parseInt(document.getElementById('maxDetSlider').value);
+            
+            // 获取选中的类别
+            const selectedClasses = [];
+            document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedClasses.push(checkbox.value);
+            });
+            
+            const config = {
+                confidence: confidence,
+                max_det: maxDet,
+                classes: selectedClasses.length > 0 ? selectedClasses : null
+            };
+            
+            try {
+                const response = await fetch('./api/detect/video/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        camera_id: currentCameraId,
+                        config: config
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('摄像头启动成功:', data.message);
+                    
+                    // 更新视频流源
+                    const videoFeed = document.getElementById('videoFeed');
+                    videoFeed.src = `./video_feed/${currentCameraId}?t=${new Date().getTime()}`;
+                    
+                    isStreaming = true;
+                    updateCameraStatus(true);
+                    
+                    // 开始定期获取检测结果
+                    setTimeout(updateDetectionResults, 1000);
+                } else {
+                    alert('启动摄像头失败: ' + (data.error || data.message));
+                    updateCameraStatus(false);
+                }
+            } catch (error) {
+                console.error('启动摄像头时发生错误:', error);
+                alert('启动摄像头时发生网络错误');
+                updateCameraStatus(false);
+            } finally {
+                loadingIndicator.classList.remove('active');
+            }
+        }
+        
+        // 停止摄像头流
+        async function stopCameraStream() {
+            try {
+                const response = await fetch('./api/detect/video/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        camera_id: currentCameraId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('摄像头停止成功:', data.message);
+                    
+                    // 清除视频流
+                    const videoFeed = document.getElementById('videoFeed');
+                    videoFeed.src = '';
+                    
+                    isStreaming = false;
+                    updateCameraStatus(false);
+                    
+                    // 清除检测结果
+                    document.getElementById('detectionCount').textContent = '0';
+                    document.getElementById('detectionCounter').textContent = '0';
+                    document.getElementById('detectionList').innerHTML = '<div class="detection-item">摄像头已停止</div>';
+                }
+            } catch (error) {
+                console.error('停止摄像头时发生错误:', error);
+            }
+        }
+        
+        // 更新检测配置
+        async function updateConfig() {
+            const confidence = parseFloat(document.getElementById('confidenceSlider').value);
+            const maxDet = parseInt(document.getElementById('maxDetSlider').value);
+            
+            // 获取选中的类别
+            const selectedClasses = [];
+            document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedClasses.push(checkbox.value);
+            });
+            
+            const config = {
+                confidence: confidence,
+                max_det: maxDet,
+                classes: selectedClasses.length > 0 ? selectedClasses : null,
+                show_labels: true,
+                show_conf: true
+            };
+            
+            try {
+                const response = await fetch('./api/config/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('配置更新成功！');
+                    
+                    // 如果正在流式传输，重启摄像头以应用新配置
+                    if (isStreaming) {
+                        stopCameraStream();
+                        setTimeout(() => startCameraStream(), 500);
+                    }
+                } else {
+                    alert('配置更新失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('更新配置时发生错误:', error);
+                alert('更新配置时发生网络错误');
+            }
+        }
+        
+        // 更新摄像头状态显示
+        function updateCameraStatus(isActive = null) {
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            if (isActive === null) {
+                // 获取当前状态
+                fetch(`./api/stream/status?camera_id=${currentCameraId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (data.is_running) {
+                                statusIndicator.className = 'status-indicator status-online';
+                                statusText.textContent = '运行中';
+                                isStreaming = true;
+                            } else {
+                                statusIndicator.className = 'status-indicator status-offline';
+                                statusText.textContent = '未连接';
+                                isStreaming = false;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取摄像头状态失败:', error);
+                    });
+            } else {
+                if (isActive) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = '运行中';
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusText.textContent = '未连接';
+                }
+            }
+        }
+        
+        // 更新检测结果
+        async function updateDetectionResults() {
+            if (!isStreaming) return;
+            
+            try {
+                const response = await fetch(`./api/detect/video/result?camera_id=${currentCameraId}`);
+                const data = await response.json();
+                
+                console.log('检测结果:', data);
+                if (data.success && data.results) {
+                    let ss = "" ;
+                    for(let idx in data.results) {
+                        let res = data.results[idx];
+                        ss += `<div class="detection-item">
+                                    <div class="detection-class">${res.hand_label} - ${res.hand_category}</div>
+                                    <div class="detection-confidence">${(res.confidence * 100).toFixed(1)}%</div>
+                               </div>`;
+                    }
+                    // 更新检测结果列表
+                    let res_list = $("#detectionList");
+                    res_list.html(ss);
+                    
+                }
+                else
+                    res_list.html(data.error||"error");
+            } catch (error) {
+                console.error('获取检测结果失败:', error);
+            }
+        }
+        
+        // 更新FPS计数
+        function updateFps() {
+            const now = Date.now();
+            const elapsed = now - lastFpsUpdate;
+            
+            if (elapsed > 0 && fpsCounter > 0) {
+                const fps = Math.round((fpsCounter * 1000) / elapsed);
+                document.getElementById('fpsCounter').textContent = fps;
+            }
+            
+            fpsCounter = 0;
+            lastFpsUpdate = now;
+        }
+        
+        // 视频流帧计数器
+        document.getElementById('videoFeed').addEventListener('load', function() {
+            fpsCounter++;
+        });
+    </script>
+</body>
+</html>

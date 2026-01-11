@@ -1,0 +1,18 @@
+name: yolo_server
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - opencv
+  - flask
+  - flask-cors
+  - pip
+  - pytorch
+  - torchvision
+  - cpuonly  # 如果用GPU，请删除此行，并参考上述CUDA选项
+  - pip:
+    - ultralytics
+    - pillow  # 如果需要处理更多图像格式，可以用pip安装pillow
