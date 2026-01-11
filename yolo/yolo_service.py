@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 from util_log import logger
 
 class YOLOService:
-    def __init__(self, model_path: str = 'yolov8n.pt'):
+    def __init__(self, model_path: str = '_models/yolov8n.pt'):
         """
         初始化YOLO服务 yolov8n-pose.pt yolov8n.pt
         """

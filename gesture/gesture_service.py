@@ -16,7 +16,7 @@ GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
 class GestureService:
-    def __init__(self, model_path: str = 'gesture_recognizer.task'):
+    def __init__(self, model_path: str = '_models/gesture_recognizer.task'):
         self.model_path = model_path
         self.base_options = BaseOptions(model_asset_path=model_path)
 

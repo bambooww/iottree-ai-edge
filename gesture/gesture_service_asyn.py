@@ -18,7 +18,7 @@ GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
 class GestureServiceAsyn:
-    def __init__(self, model_path: str = 'gesture_recognizer.task', draw_result_image:bool=True):
+    def __init__(self, model_path: str = '_models/gesture_recognizer.task', draw_result_image:bool=True):
         self.model_path = model_path
         self.base_options = BaseOptions(model_asset_path=model_path)
         self.draw_result_image = draw_result_image

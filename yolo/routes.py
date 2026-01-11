@@ -13,7 +13,7 @@ from camera import Camera
 yolo = Blueprint('yolo', __name__, url_prefix='/yolo')
 
 # 初始化YOLO服务
-yolo_service = yolo_service.YOLOService('yolov8n.pt')
+yolo_service = yolo_service.YOLOService('_models/yolov8n.pt')
 camera = Camera()
 # ==================== 网页路由 ====================
 
