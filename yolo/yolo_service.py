@@ -8,7 +8,9 @@ import base64
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
-from util_log import logger
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class YOLOService:
     def __init__(self, model_path: str = '_models/yolov8n.pt'):

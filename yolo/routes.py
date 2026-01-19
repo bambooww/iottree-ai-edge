@@ -6,15 +6,18 @@ import numpy as np
 import base64
 import json
 import cv2
-from util_log import logger
 from . import yolo_service
-from camera import Camera
+from util.camera_loc import CameraLoc
+
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 yolo = Blueprint('yolo', __name__, url_prefix='/yolo')
 
 # 初始化YOLO服务
 yolo_service = yolo_service.YOLOService('_models/yolov8n.pt')
-camera = Camera()
+camera = CameraLoc()
 # ==================== 网页路由 ====================
 
 @yolo.route('/')
@@ -122,7 +125,7 @@ def start_video_detection():
                 'success': False
             }), 400
         
-        success = camera.start_camera_stream(camera_id,yolo_service, config)
+        success = camera.start_camera(camera_id,yolo_service, config)
         
         return jsonify({
             'success': success,
@@ -143,7 +146,7 @@ def stop_video_detection():
         data = request.get_json() or {}
         camera_id = data.get('camera_id', 0)
         
-        success = camera.stop_camera_stream(camera_id)
+        success = camera.stop_camera(camera_id)
         
         return jsonify({
             'success': success,

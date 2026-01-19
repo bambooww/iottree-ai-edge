@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摄像头详细</title>
+    <script src="/static/inc/jquery.min.js"></script>
+    <script src="/static/inc/ajax.js"></script>
+    <link rel="stylesheet" type="text/css" href="/static/inc/common.css" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>摄像头详细</h1>
+            <div class="subtitle">{{camera_title}}</div>
+        </header>
+        
+        <div class="main-content">
+            <!-- 视频显示区域 -->
+            <div class="video-section">
+                <div class="video-container">
+                    <div class="loading" id="loadingIndicator">
+                        <span>正在加载摄像头...</span>
+                    </div>
+                    <img id="videoFeed" class="video-feed" src="" alt="实时视频流">
+                    <div class="video-info">
+                        <div>摄像头 ID: <span id="currentCamera">0</span></div>
+                        <div>状态: 
+                            <span class="status-indicator status-offline" id="statusIndicator"></span>
+                            <span id="statusText">未连接</span>
+                        </div>
+                        <div>检测目标数: <span id="detectionCount">0</span></div>
+                        <div>最后更新: <span id="lastUpdate">-</span></div>
+                    </div>
+                </div>
+                
+                <div class="detection-info">
+                    <h3>检测结果</h3>
+                    <div class="detection-list" id="detectionList">
+                        <div class="detection-item">
+                            <div>等待摄像头启动...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 控制面板区域 -->
+            <div class="control-section">
+                <div class="control-group">
+                    <div class="control-title">摄像头控制 </div>
+                    
+                    <button class="btn btn-primary" id="startCameraBtn">
+                        <span>启动摄像头</span>
+                    </button>
+                    
+                    <button class="btn btn-danger" id="stopCameraBtn">
+                        <span>停止摄像头</span>
+                    </button>
+
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-title">检测配置</div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>置信度阈值</span>
+                            <span class="slider-value" id="confidenceValue">0.25</span>
+                        </div>
+                        <input type="range" id="confidenceSlider" min="0" max="1" step="0.05" value="0.25">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>检测目标数上限</span>
+                            <span class="slider-value" id="maxDetValue">300</span>
+                        </div>
+                        <input type="range" id="maxDetSlider" min="1" max="500" step="1" value="300">
+                    </div>
+                    
+                    <div class="config-group">
+                        <div class="control-title">检测类别</div>
+                        <div class="category-checkboxes" id="categoryCheckboxes">
+                            <!-- 类别选择框将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                    
+                    <button  class="btn btn-success" id="updateConfigBtn" style="margin-top: 20px;display:none;">
+                        <span>更新配置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>手势检测</p>
+        </footer>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentCameraId = "{{camera_id}}";
+        let isStreaming = false;
+        let fpsCounter = 0;
+        let lastFpsUpdate = Date.now();
+        let totalDetections = 0;
+        let detectionResults = [];
+        
+        // 初始化函数
+        document.addEventListener('DOMContentLoaded', function() {
+
+            initEventListeners();
+            updateCameraStatus();
+            
+            // 开始更新FPS计数
+            setInterval(updateFps, 1000);
+            
+            // 定期更新检测结果
+            setInterval(updateDetectionResults, 1000);
+        });
+        
+        
+        // 初始化事件监听器
+        function initEventListeners() {
+            // 启动摄像头按钮
+            document.getElementById('startCameraBtn').addEventListener('click', startCameraStream);
+            
+            // 停止摄像头按钮
+            document.getElementById('stopCameraBtn').addEventListener('click', stopCameraStream);
+            
+            // 更新配置按钮
+            document.getElementById('updateConfigBtn').addEventListener('click', updateConfig);
+            
+            // 置信度滑块
+            const confidenceSlider = document.getElementById('confidenceSlider');
+            confidenceSlider.addEventListener('input', function() {
+                document.getElementById('confidenceValue').textContent = this.value;
+            });
+            
+            // 最大检测数滑块
+            const maxDetSlider = document.getElementById('maxDetSlider');
+            maxDetSlider.addEventListener('input', function() {
+                document.getElementById('maxDetValue').textContent = this.value;
+            });
+            
+            // 视频流错误处理
+            document.getElementById('videoFeed').addEventListener('error', function() {
+                console.error('视频流加载失败');
+                updateCameraStatus(false);
+            });
+            
+            // 视频流加载完成
+            document.getElementById('videoFeed').addEventListener('load', function() {
+                console.log('视频流加载成功');
+                updateCameraStatus(true);
+            });
+        }
+        
+        // 启动摄像头流
+        async function startCameraStream() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.classList.add('active');
+            
+            const confidence = parseFloat(document.getElementById('confidenceSlider').value);
+            const maxDet = parseInt(document.getElementById('maxDetSlider').value);
+            
+            // 获取选中的类别
+            const selectedClasses = [];
+            document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedClasses.push(checkbox.value);
+            });
+            
+            const config = {
+                confidence: confidence,
+                max_det: maxDet,
+                classes: selectedClasses.length > 0 ? selectedClasses : null
+            };
+            
+            try {
+                const response = await fetch(`./start?camera_id=${currentCameraId}`, {
+                    method: 'GET'
+                    })
+                
+                const data = await response.json();
+                
+                if (data.success)
+                {
+                    console.log('摄像头启动成功:', data.message);
+                    
+                    // 更新视频流源
+                    const videoFeed = document.getElementById('videoFeed');
+                    videoFeed.src = `./frames?camera_id=${currentCameraId}&t=${new Date().getTime()}`;
+                    
+                    isStreaming = true;
+                    updateCameraStatus(true);
+                    
+                    // 开始定期获取检测结果
+                    console.log('开始更新检测结果...');
+                    setTimeout(updateDetectionResults, 1000);
+                } else
+                {
+                    alert('启动摄像头失败: ' + (data.error || data.message));
+                    updateCameraStatus(false);
+                }
+            } catch (error) {
+                console.error('启动摄像头时发生错误:', error);
+                alert('启动摄像头时发生网络错误');
+                updateCameraStatus(false);
+            } finally {
+                loadingIndicator.classList.remove('active');
+            }
+        }
+        
+        // 停止摄像头流
+        async function stopCameraStream() {
+            try {
+                const response = await fetch(`./stop?camera_id=${currentCameraId}`, {
+                    method: 'GET'
+                    })
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('摄像头停止成功:', data.message);
+                    
+                    // 清除视频流
+                    const videoFeed = document.getElementById('videoFeed');
+                    videoFeed.src = '';
+                    
+                    isStreaming = false;
+                    updateCameraStatus(false);
+                    
+                    // 清除检测结果
+                    document.getElementById('detectionCount').textContent = '0';
+                    document.getElementById('detectionCounter').textContent = '0';
+                    document.getElementById('detectionList').innerHTML = '<div class="detection-item">摄像头已停止</div>';
+                }
+            } catch (error) {
+                console.error('停止摄像头时发生错误:', error);
+            }
+        }
+        
+        // 更新检测配置
+        async function updateConfig() {
+            const confidence = parseFloat(document.getElementById('confidenceSlider').value);
+            const maxDet = parseInt(document.getElementById('maxDetSlider').value);
+            
+            // 获取选中的类别
+            const selectedClasses = [];
+            document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedClasses.push(checkbox.value);
+            });
+            
+            const config = {
+                confidence: confidence,
+                max_det: maxDet,
+                classes: selectedClasses.length > 0 ? selectedClasses : null,
+                show_labels: true,
+                show_conf: true
+            };
+            
+        }
+        
+        // 更新摄像头状态显示
+        function updateCameraStatus(isActive = null) {
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            if (isActive === null) {
+                // 获取当前状态
+                fetch(`./status?camera_id=${currentCameraId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (data.is_running) {
+                                statusIndicator.className = 'status-indicator status-online';
+                                statusText.textContent = '运行中';
+                                isStreaming = true;
+                            } else {
+                                statusIndicator.className = 'status-indicator status-offline';
+                                statusText.textContent = '未连接';
+                                isStreaming = false;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取摄像头状态失败:', error);
+                    });
+            } else {
+                if (isActive) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = '运行中';
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusText.textContent = '未连接';
+                }
+            }
+        }
+        
+        // 更新检测结果
+        async function updateDetectionResults() {
+            if (!isStreaming) return;
+            
+            try {
+                const response = await fetch(`./result?camera_id=${currentCameraId}`);
+                const data = await response.json();
+                
+                console.log('检测结果:', data);
+                if (data.success && data.results) {
+                    let ss = "" ;
+                    for(let idx in data.results) {
+                        let res = data.results[idx];
+                        ss += `<div class="detection-item">
+                                    <div class="detection-class">${res.hand_label} - ${res.hand_category}</div>
+                                    <div class="detection-confidence">${(res.confidence * 100).toFixed(1)}%</div>
+                               </div>`;
+                    }
+                    // 更新检测结果列表
+                    let res_list = $("#detectionList");
+                    res_list.html(ss);
+                    
+                }
+                else
+                {
+                    $("#detectionList").html(data.error||"error");
+                }
+                    
+            } catch (error) {
+                console.error('获取检测结果失败:', error);
+            }
+        }
+        
+        // 更新FPS计数
+        function updateFps() {
+            const now = Date.now();
+            const elapsed = now - lastFpsUpdate;
+            
+            if (elapsed > 0 && fpsCounter > 0) {
+                const fps = Math.round((fpsCounter * 1000) / elapsed);
+                document.getElementById('fpsCounter').textContent = fps;
+            }
+            
+            fpsCounter = 0;
+            lastFpsUpdate = now;
+        }
+        
+        // 视频流帧计数器
+        document.getElementById('videoFeed').addEventListener('load', function() {
+            fpsCounter++;
+        });
+    </script>
+</body>
+</html>

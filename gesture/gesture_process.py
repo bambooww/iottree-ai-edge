@@ -1,3 +1,4 @@
+import threading
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -7,8 +8,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
 
-from util import Camera,CameraProcessCallback
-from util.camera import CameraProcess
+from util.camera import Camera, CameraProcess,CameraProcessCallback
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,11 +18,17 @@ GestureRecognizer = mp.tasks.vision.GestureRecognizer
 GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-class GestureServiceAsyn(CameraProcess):
-    def __init__(self, model_path: str = '_models/gesture_recognizer.task', draw_result_image:bool=True):
+class GestureProcess(CameraProcess):
+    _process_result:Dict|None
+    _process_annoted_frame:cv2.typing.MatLike | None
+    _recognizer = None
+
+    _lock:threading.RLock = threading.RLock()
+
+    def __init__(self, model_path: str = '_models/gesture_recognizer.task'):
         self.model_path = model_path
         self.base_options = BaseOptions(model_asset_path=model_path)
-        self.draw_result_image = draw_result_image
+        
 
         # Load the input image from an image file.
         #mp_image = mp.Image.create_from_file('./thumbs_up.jpg')
@@ -36,28 +42,39 @@ class GestureServiceAsyn(CameraProcess):
         
         
     def __enter__(self):
-        self.options = GestureRecognizerOptions(
-            self.base_options,
-            num_hands=2,
-            running_mode=VisionRunningMode.LIVE_STREAM,
-            result_callback=self.result_callback)  # VIDEO LIVE_STREAM
-        logger.info("手势识别服务初始化完成。")
-
-        logger.info("创建手势识别器实例...")
-        self.recognizer = GestureRecognizer.create_from_options(self.options)
+        self.get_or_create_recognizer()
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
         logger.info("关闭手势识别器实例...")
-        if self.recognizer:
-            self.recognizer.close()
-            self.recognizer = None
+        if self._recognizer:
+            self._recognizer.close()
+            self._recognizer = None
+    
+    def get_or_create_recognizer(self):
+        with self._lock:
+            if(self._recognizer is not None):
+                return self._recognizer
+            
+            self.options = GestureRecognizerOptions(
+                self.base_options,
+                num_hands=2,
+                running_mode=VisionRunningMode.LIVE_STREAM,
+                result_callback=self.result_callback)  # VIDEO LIVE_STREAM
+            logger.info("手势识别服务初始化完成。")
+
+            logger.info("创建手势识别器实例...")
+            self._recognizer = GestureRecognizer.create_from_options(self.options)
+            return self._recognizer
+        
+    def get_camera_process_name(self)->str:
+        return "gesture"
 
     def result_callback(self, recognition_result, output_image, timestamp_ms):
         """处理视频流回调结果"""
          # 判断与展示结果
         annotated_image = None
-        if self.draw_result_image:
+        if self.is_owner_camera_debug():
             annotated_image = annotated_image = self.current_frame.copy()
         
         # 判断是否有检测到手
@@ -94,23 +111,30 @@ class GestureServiceAsyn(CameraProcess):
                         cv2.circle(annotated_image, (x, y), 5, (0, 255, 0), -1)
         
         if(res is not None):
-            result={
+            self._process_result={
                 'success': True,
                 'hand_count': len(recognition_result.hand_landmarks),
                 'timestamp': datetime.now().isoformat(),
                 'results': res
             }
+            self._process_annoted_frame = annotated_image
             if(self.process_callback is not None):
-                self.process_callback.on_frame_process_result(result, annotated_image)
+                self.process_callback.on_frame_process_result(self._process_result, annotated_image)
+            # if(self._owner_camera is not None):
+            #     self._owner_camera.on_process_callback(self._process_result, annotated_image)
 
     def is_camera_process_async(self) -> bool:
         return True
     
+    def get_camera_process_result(self)-> tuple[Dict|None,cv2.typing.MatLike|None]:
+        return self._process_result,self._process_annoted_frame
+
     def set_camera_process_callback(self, callback: CameraProcessCallback) -> None:
         self.process_callback = callback
 
     def set_camera_debug(self, debug: bool=False) -> None:
-        self.draw_result_image = debug
+        # self.draw_result_image = debug
+        pass
     
     def on_camera_frame(self, frame:cv2.typing.MatLike,config: Optional[Dict] = None) -> tuple[Dict, cv2.typing.MatLike | None]:
         """处理摄像头帧回调"""
@@ -120,5 +144,5 @@ class GestureServiceAsyn(CameraProcess):
         
         self.current_frame = frame
         # 进行识别
-        self.recognizer.recognize_async(mp_image, int(datetime.now().timestamp() * 1000))
+        self.get_or_create_recognizer().recognize_async(mp_image,int(datetime.now().timestamp() * 1000))
         

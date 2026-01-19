@@ -6,22 +6,23 @@ import numpy as np
 import base64
 import json
 import cv2
-from util_log import logger
 from . import gesture_service_asyn
-from camera import Camera
+from util import camera_mgr
 import atexit
 
-from util_log import logger
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 logger.info("加载手势识别路由...")
 gest = Blueprint('gesture', __name__, url_prefix='/gesture')
 
 # 初始化服务
 logger.info("初始化手势识别服务...")
-gesture_ser = gesture_service_asyn.GestureServiceAsyn(draw_result_image=False)
+gesture_ser = gesture_service_asyn.GestureServiceAsyn(draw_result_image=True)
 
-logger.info("初始化摄像头服务...")
-camera = Camera()
+#logger.info("初始化摄像头服务...")
+#camera = CameraLoc()
 
 # ==================== 网页路由 ====================
 
@@ -59,15 +60,23 @@ def teardown_request(exception=None):
 @gest.route('/')
 def index():
     """主页面 - 显示摄像头监控界面"""
-    available_cameras = camera.get_available_cameras()
-    running_cameras = camera.get_running_cameras()
-    return render_template('index_gesture.html', 
-                          available_cameras=available_cameras,
-                          running_cameras=running_cameras)
+    available_cameras = camera_mgr.list_camera_loc() #camera.get_available_cameras()
+    cams = []
+    for c in available_cameras:
+        cams.append({
+            "camera_id": c.get_camera_id(),
+            "camera_title": c.get_camera_title()
+        })
+    return render_template('index_gesture.html',
+                            cameras=cams)
 
-@gest.route('/video_feed/<int:camera_id>')
+@gest.route('/video_feed/<str:camera_id>')
 def video_feed(camera_id):
     """生成摄像头视频流（MJPEG格式）"""
+    camera = camera_mgr.get_camera(camera_id)
+    if(camera is None):
+        return "摄像头不存在", 404
+    
     def generate():
         while True:
             frame = camera.get_camera_frame(camera_id)
@@ -80,9 +89,13 @@ def video_feed(camera_id):
     
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@gest.route('/video_feed_single/<int:camera_id>')
+@gest.route('/video_feed_single/<str:camera_id>')
 def video_feed_single(camera_id):
     """获取单张摄像头帧（用于AJAX请求）"""
+    camera = camera_mgr.get_camera(camera_id)
+    if(camera is None):
+        return "摄像头不存在", 404
+    
     frame = camera.get_camera_frame(camera_id)
     if frame:
         return Response(frame, mimetype='image/jpeg')
@@ -95,14 +108,14 @@ def video_feed_single(camera_id):
 
 # ==================== API路由 ====================
 
-@gest.route('/api/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        'status': 'healthy',
-        'service': 'yolo-detection-api',
-        'timestamp': datetime.now().isoformat(),
-        'running_cameras': camera.get_running_cameras()
-    })
+# @gest.route('/api/health', methods=['GET'])
+# def health_check():
+#     return jsonify({
+#         'status': 'healthy',
+#         'service': 'yolo-detection-api',
+#         'timestamp': datetime.now().isoformat(),
+#         'running_cameras': camera.get_running_cameras()
+#     })
 
 @gest.route('/api/detect/image', methods=['POST'])
 def detect_image():
@@ -136,7 +149,7 @@ def detect_image():
                 'success': False
             }), 400
         
-        result = gesture_service.recognize_gesture(image_data, config)
+        result = gesture_ser.recognize_gesture(image_data, config)
         return jsonify(result)
         
     except Exception as e:
@@ -150,7 +163,11 @@ def detect_image():
 def start_video_detection():
     try:
         data = request.get_json() or {}
-        camera_id = data.get('camera_id', 0)
+        camera_id = data.get('camera_id', "loc_0")
+        camera = camera_mgr.get_camera(camera_id)
+        if(camera is None):
+            return "摄像头不存在", 404
+    
         config = data.get('config', {})
         
         available_cameras = camera.get_available_cameras()
@@ -161,7 +178,7 @@ def start_video_detection():
                 'success': False
             }), 400
         
-        success = camera.start_camera_stream(camera_id,gesture_ser, config)
+        success = camera.start_camera(camera_id,gesture_ser, config)
         
         return jsonify({
             'success': success,
@@ -180,9 +197,12 @@ def start_video_detection():
 def stop_video_detection():
     try:
         data = request.get_json() or {}
-        camera_id = data.get('camera_id', 0)
+        camera_id = data.get('camera_id', "loc_0")
+        camera = camera_mgr.get_camera(camera_id)
+        if(camera is None):
+            return "摄像头不存在", 404
         
-        success = camera.stop_camera_stream(camera_id)
+        success = camera.stop_camera(camera_id)
         
         return jsonify({
             'success': success,
@@ -199,7 +219,10 @@ def stop_video_detection():
 @gest.route('/api/detect/video/result', methods=['GET'])
 def get_video_result():
     try:
-        camera_id = request.args.get('camera_id', 0, type=int)
+        camera_id = request.args.get('camera_id', "loc_0", type=str)
+        camera = camera_mgr.get_camera(camera_id)
+        if(camera is None):
+            return "摄像头不存在", 404
         result = camera.get_camera_result(camera_id)
         return jsonify(result)
         
@@ -240,23 +263,23 @@ def get_video_result():
 #         'custom_categories': yolo_service.custom_categories
 #     })
 
-@gest.route('/api/cameras/available', methods=['GET'])
-def get_available_cameras():
-    available = camera.get_available_cameras()
-    return jsonify({
-        'success': True,
-        'available_cameras': available,
-        'count': len(available)
-    })
+# @gest.route('/api/cameras/available', methods=['GET'])
+# def get_available_cameras():
+#     available = camera.get_available_cameras()
+#     return jsonify({
+#         'success': True,
+#         'available_cameras': available,
+#         'count': len(available)
+#     })
 
-@gest.route('/api/cameras/running', methods=['GET'])
-def get_running_cameras():
-    running = camera.get_running_cameras()
-    return jsonify({
-        'success': True,
-        'running_cameras': running,
-        'count': len(running)
-    })
+# @gest.route('/api/cameras/running', methods=['GET'])
+# def get_running_cameras():
+#     running = camera.get_running_cameras()
+#     return jsonify({
+#         'success': True,
+#         'running_cameras': running,
+#         'count': len(running)
+#     })
 
 # @gest.route('/api/categories/list', methods=['GET'])
 # def list_categories():
@@ -269,7 +292,12 @@ def get_running_cameras():
 
 @gest.route('/api/stream/status', methods=['GET'])
 def stream_status():
-    camera_id = request.args.get('camera_id', 0, type=int)
+    camera_id = request.args.get('camera_id', None, type=str)
+    if(camera_id is None):
+        return "未提供摄像头ID", 400
+    camera = camera_mgr.get_camera(camera_id)
+    if(camera is None):
+        return "摄像头不存在", 404
     frame = camera.get_camera_frame(camera_id)
     return jsonify({
         'success': True,

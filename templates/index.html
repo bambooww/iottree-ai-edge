@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手势检测</title>
+    <title>IOT-Tree AI Edge</title>
     <style>
         * {
             margin: 0;
@@ -375,13 +375,38 @@
 <body>
     <div class="container">
         <header>
-            <h1>手势实时检测</h1>
-            <div class="subtitle">测试界面</div>
+            <h1>IOT-Tree AI Edge</h1>
+            <div class="subtitle"></div>
         </header>
         
         <div class="main-content">
-            <!-- 视频显示区域 -->
             <div class="video-section">
+
+                <div class="control-group">
+                <div class="control-title">Local Camera</div>
+                
+                <div class="camera-selector" id="cameraSelector">
+                    {% for cam in cameras %}
+                        <div class="btn btn-secondary camera-btn" data-camera-id="{{ cam.camera_id }}">
+                            {{ cam.camera_title }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+
+            <div class="video-section">
+
+                <div class="control-group">
+                <div class="control-title">IP Camera</div>
+                
+                <div class="camera-selector" id="ip_cams">
+                    
+                </div>
+
+            </div>
+
+            
                 <div class="video-container">
                     <div class="loading" id="loadingIndicator">
                         <span>正在加载摄像头...</span>
@@ -406,6 +431,7 @@
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
             
             <!-- 控制面板区域 -->
@@ -465,149 +491,11 @@
         </div>
         
         <footer>
-            <p>手势检测</p>
+            <p></p>
         </footer>
     </div>
 
     <script>
-        // 全局变量
-        let currentCameraId = 0;
-        let isStreaming = false;
-        let fpsCounter = 0;
-        let lastFpsUpdate = Date.now();
-        let totalDetections = 0;
-        let detectionResults = [];
-        
-        // 初始化函数
-        document.addEventListener('DOMContentLoaded', function() {
-            // 初始化UI组件
-            //initCameraSelector();
-            initCategoryCheckboxes();
-            initEventListeners();
-            updateCameraStatus();
-            
-            // 开始更新FPS计数
-            setInterval(updateFps, 1000);
-            
-            // 定期更新检测结果
-            setInterval(updateDetectionResults, 1000);
-        });
-        
-        // 初始化摄像头选择器
-        async function initCameraSelector() {
-            const response = await fetch('./api/cameras/available');
-            const data = await response.json();
-            
-            if (data.success && data.available_cameras.length > 0) {
-                const container = document.getElementById('cameraSelector');
-                container.innerHTML = '';
-                
-                data.available_cameras.forEach(cameraId => {
-                    const button = document.createElement('div');
-                    button.className = 'camera-btn';
-                    button.textContent = `Cam ${cameraId}`;
-                    button.dataset.cameraId = cameraId;
-                    
-                    if (cameraId === 0) {
-                        button.classList.add('active');
-                    }
-                    
-                    button.addEventListener('click', () => {
-                        document.querySelectorAll('.camera-btn').forEach(btn => {
-                            btn.classList.remove('active');
-                        });
-                        button.classList.add('active');
-                        currentCameraId = cameraId;
-                        document.getElementById('currentCamera').textContent = cameraId;
-                        
-                        // 如果正在流式传输，切换到新摄像头
-                        if (isStreaming) {
-                            stopCameraStream();
-                            setTimeout(() => startCameraStream(), 500);
-                        }
-                    });
-                    
-                    container.appendChild(button);
-                });
-            }
-        }
-        
-        // 初始化类别选择框
-        async function initCategoryCheckboxes() {
-            const response = await fetch('./api/categories/list');
-            const data = await response.json();
-            
-            if (data.success) {
-                const container = document.getElementById('categoryCheckboxes');
-                container.innerHTML = '';
-                
-                // 只显示前20个常见类别以简化界面
-                const commonClasses = [
-                    'person', 'car', 'bicycle', 'motorcycle', 'bus', 'truck',
-                    'cat', 'dog', 'bird', 'horse', 'sheep', 'cow',
-                    'chair', 'dining table', 'tv', 'laptop', 'cell phone',
-                    'bottle', 'cup', 'fork'
-                ];
-                
-                commonClasses.forEach(className => {
-                    const index = data.all_classes.indexOf(className);
-                    if (index !== -1) {
-                        const checkboxItem = document.createElement('div');
-                        checkboxItem.className = 'checkbox-item';
-                        
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.id = `class_${index}`;
-                        checkbox.value = className;
-                        checkbox.checked = true;
-                        
-                        const label = document.createElement('label');
-                        label.htmlFor = `class_${index}`;
-                        label.textContent = className;
-                        
-                        checkboxItem.appendChild(checkbox);
-                        checkboxItem.appendChild(label);
-                        container.appendChild(checkboxItem);
-                    }
-                });
-            }
-        }
-        
-        // 初始化事件监听器
-        function initEventListeners() {
-            // 启动摄像头按钮
-            document.getElementById('startCameraBtn').addEventListener('click', startCameraStream);
-            
-            // 停止摄像头按钮
-            document.getElementById('stopCameraBtn').addEventListener('click', stopCameraStream);
-            
-            // 更新配置按钮
-            document.getElementById('updateConfigBtn').addEventListener('click', updateConfig);
-            
-            // 置信度滑块
-            const confidenceSlider = document.getElementById('confidenceSlider');
-            confidenceSlider.addEventListener('input', function() {
-                document.getElementById('confidenceValue').textContent = this.value;
-            });
-            
-            // 最大检测数滑块
-            const maxDetSlider = document.getElementById('maxDetSlider');
-            maxDetSlider.addEventListener('input', function() {
-                document.getElementById('maxDetValue').textContent = this.value;
-            });
-            
-            // 视频流错误处理
-            document.getElementById('videoFeed').addEventListener('error', function() {
-                console.error('视频流加载失败');
-                updateCameraStatus(false);
-            });
-            
-            // 视频流加载完成
-            document.getElementById('videoFeed').addEventListener('load', function() {
-                console.log('视频流加载成功');
-                updateCameraStatus(true);
-            });
-        }
         
         // 启动摄像头流
         async function startCameraStream() {
@@ -753,93 +641,6 @@
             }
         }
         
-        // 更新摄像头状态显示
-        function updateCameraStatus(isActive = null) {
-            const statusIndicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('statusText');
-            
-            if (isActive === null) {
-                // 获取当前状态
-                fetch(`./api/stream/status?camera_id=${currentCameraId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            if (data.is_running) {
-                                statusIndicator.className = 'status-indicator status-online';
-                                statusText.textContent = '运行中';
-                                isStreaming = true;
-                            } else {
-                                statusIndicator.className = 'status-indicator status-offline';
-                                statusText.textContent = '未连接';
-                                isStreaming = false;
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('获取摄像头状态失败:', error);
-                    });
-            } else {
-                if (isActive) {
-                    statusIndicator.className = 'status-indicator status-online';
-                    statusText.textContent = '运行中';
-                } else {
-                    statusIndicator.className = 'status-indicator status-offline';
-                    statusText.textContent = '未连接';
-                }
-            }
-        }
-        
-        // 更新检测结果
-        async function updateDetectionResults() {
-            if (!isStreaming) return;
-            
-            try {
-                const response = await fetch(`./api/detect/video/result?camera_id=${currentCameraId}`);
-                const data = await response.json();
-                
-                console.log('检测结果:', data);
-                if (data.success && data.results) {
-                    let ss = "" ;
-                    for(let idx in data.results) {
-                        let res = data.results[idx];
-                        ss += `<div class="detection-item">
-                                    <div class="detection-class">${res.hand_label} - ${res.hand_category}</div>
-                                    <div class="detection-confidence">${(res.confidence * 100).toFixed(1)}%</div>
-                               </div>`;
-                    }
-                    // 更新检测结果列表
-                    let res_list = $("#detectionList");
-                    res_list.html(ss);
-                    
-                }
-                else
-                {
-                    $("#detectionList").html(data.error||"error");
-                }
-                    
-            } catch (error) {
-                console.error('获取检测结果失败:', error);
-            }
-        }
-        
-        // 更新FPS计数
-        function updateFps() {
-            const now = Date.now();
-            const elapsed = now - lastFpsUpdate;
-            
-            if (elapsed > 0 && fpsCounter > 0) {
-                const fps = Math.round((fpsCounter * 1000) / elapsed);
-                document.getElementById('fpsCounter').textContent = fps;
-            }
-            
-            fpsCounter = 0;
-            lastFpsUpdate = now;
-        }
-        
-        // 视频流帧计数器
-        document.getElementById('videoFeed').addEventListener('load', function() {
-            fpsCounter++;
-        });
     </script>
 </body>
 </html>
