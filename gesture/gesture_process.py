@@ -19,8 +19,8 @@ GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
 class GestureProcess(CameraProcess):
-    _process_result:Dict|None
-    _process_annoted_frame:cv2.typing.MatLike | None
+    _process_result:Dict|None = None
+    _process_annoted_frame:cv2.typing.MatLike | None = None
     _recognizer = None
 
     _lock:threading.RLock = threading.RLock()
@@ -120,6 +120,9 @@ class GestureProcess(CameraProcess):
             self._process_annoted_frame = annotated_image
             if(self.process_callback is not None):
                 self.process_callback.on_frame_process_result(self._process_result, annotated_image)
+        elif self.process_callback is not None:
+            self._process_result={'success': False}
+            self.process_callback.on_frame_process_result(self._process_result, None)
             # if(self._owner_camera is not None):
             #     self._owner_camera.on_process_callback(self._process_result, annotated_image)
 

@@ -40,15 +40,15 @@ class CameraManager:
     
     def get_process_by_name(self, name:str) -> Optional[CameraProcess]:
         """根据名称获取处理实例"""
-        with self._lock:
+        # with self._lock:
             # if name in self._name2process:
             #     return self._name2process[name]
             
-            if(name == "gesture"):
-                process = GestureProcess()
-                #self._name2process[name] = process
-                return process
-            return None
+        if(name == "gesture"):
+            process = GestureProcess()
+            #self._name2process[name] = process
+            return process
+        return None
         
     def list_camera_loc(self) -> List[CameraLoc]:
         """列出本地可用摄像头ID列表"""

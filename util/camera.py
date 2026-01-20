@@ -14,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 from typing import Protocol, runtime_checkable
 import logging
 
+from util import camera_mgr
+
 # from util import camera_mgr
 
 logging.basicConfig(level=logging.INFO)
@@ -163,11 +165,14 @@ class Camera(ABC):
                 
                 try:
                     while self._thread is not None:
+                        # check period timeout
+                        if self._check_period_timeout():
+                            break
+
                         ret, frame = self._on_get_frame_camera_run()
                         if not ret:
                             time.sleep(0.1)
                             continue
-                        
                         
                         if(self._process is None):
                             if(self._debug_frame):
@@ -191,7 +196,7 @@ class Camera(ABC):
                     # 清理
                     self._on_after_camera_run()
 
-                    logger.info(f"摄像头 {self._camera_id} 已停止")
+                    logger.info(f"camera {self._camera_id} stopped")
                 finally:
                     self._thread = None
 
@@ -283,19 +288,33 @@ class Camera(ABC):
     #         self._process = proc
     #         return True
 
-    def trigger_process_period_ret(self,period_seconds:float=5.0) -> tuple[bool,Dict|None,cv2.typing.MatLike|None]:
-        """触发摄像头处理器处理结果回调"""
-        
+    def _check_period_timeout(self)->bool:
+        if(not self._period_triggered):
+            return False
+        return time.time()-self._period_start_time>self._period_seconds
+
+    def trigger_process_period_ret(self,process:str,period_seconds:float=5.0) -> tuple[bool,Dict|None]:
+        """  """
         with self._lock:
-            if(self._process is None):
-                return False,None,None
-        
             if self.is_camera_running():
+                if(self._process is not None and self._process.get_camera_process_name()!=process):
+                    # process is not match,wait to timeout
+                    return False,None
+                
                 self._period_start_time = time.time()
+                self._period_seconds = period_seconds
                 self._period_triggered = True
-                return True,self._process.get_camera_process_result()
+                res,_ = self._process.get_camera_process_result()
+                return True,res
             
-            self.start_camera()
+            from util import camera_mgr
+            proc = camera_mgr.get_process_by_name(process)
+            if proc is None:
+                return False,None
+            self.set_process(proc)
             self._period_start_time = time.time()
             self._period_triggered = True
-            return True,self._process.get_camera_process_result()
+            self.start_camera()
+            
+            res,_ = self._process.get_camera_process_result()
+            return True,res

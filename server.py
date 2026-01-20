@@ -9,7 +9,7 @@ import json
 import os
 #from yolo.routes import yolo
 # from gesture.routes import gest
-from web_admin.routes_admin import admin
+from web_admin.routes_camera import admin
 
 import logging
 logging.basicConfig(level=logging.INFO)

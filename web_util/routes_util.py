@@ -51,20 +51,6 @@ def teardown_request(exception=None):
     if exception:
         print(f"请求异常: {exception}")
 
-@util.route('/')
-def index():
-    """主页面 - 显示摄像头监控界面"""
-    available_cameras = camera_mgr.list_camera_loc() #camera.get_available_cameras()
-    cams = []
-    for c in available_cameras:
-        cams.append({
-            "camera_id": c.get_camera_id(),
-            "camera_title": c.get_camera_title()
-        })
-        return render_template('index_gesture.html',
-                                cameras=cams)
-
-
 
 @util.route('/camera_reco?camera_id=<camera_id>&process=<process>', methods=['GET'])
 def camera_reco(camera_id, process = "gesture"):
@@ -82,63 +68,6 @@ def camera_reco(camera_id, process = "gesture"):
         'has_frame': frame is not None,
         'is_running': camera_id in camera.active_cameras
     })
-
-@util.route('/api/detect/video/start', methods=['POST'])
-def start_video_detection():
-    try:
-        data = request.get_json() or {}
-        camera_id = data.get('camera_id', "loc_0")
-        camera = camera_mgr.get_camera(camera_id)
-        if(camera is None):
-            return "摄像头不存在", 404
-    
-        config = data.get('config', {})
-        
-        available_cameras = camera.get_available_cameras()
-        if camera_id not in available_cameras:
-            return jsonify({
-                'error': f'摄像头 {camera_id} 不可用',
-                'available_cameras': available_cameras,
-                'success': False
-            }), 400
-        
-        success = camera.start_camera(camera_id,gesture_ser, config)
-        
-        return jsonify({
-            'success': success,
-            'camera_id': camera_id,
-            'message': '摄像头检测已启动' if success else '摄像头已在运行或启动失败',
-            'timestamp': datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'success': False
-        }), 500
-
-@util.route('/api/detect/video/stop', methods=['POST'])
-def stop_video_detection():
-    try:
-        data = request.get_json() or {}
-        camera_id = data.get('camera_id', "loc_0")
-        camera = camera_mgr.get_camera(camera_id)
-        if(camera is None):
-            return "摄像头不存在", 404
-        
-        success = camera.stop_camera(camera_id)
-        
-        return jsonify({
-            'success': success,
-            'camera_id': camera_id,
-            'message': '摄像头检测已停止' if success else '摄像头未在运行'
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'success': False
-        }), 500
 
 @util.route('/api/detect/video/result', methods=['GET'])
 def get_video_result():

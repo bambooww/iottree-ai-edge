@@ -1,3 +1,4 @@
+import traceback
 from flask import Blueprint
 from flask import Flask, request, jsonify, render_template, Response
 import time
@@ -15,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-admin = Blueprint('admin', __name__, url_prefix='/admin')
+admin = Blueprint('camera', __name__, url_prefix='/camera')
 
 # ==================== 网页路由 ====================
 
@@ -25,7 +26,7 @@ _initialized = False
 
 @admin.record_once
 def on_load(setup_state):
-    """蓝图被加载到应用时调用（一次）"""
+    """ once """
     global _initialized
     if not _initialized:
         # 进入上下文管理器
@@ -160,7 +161,7 @@ def del_camera(camera_id:str):
         }), 500
 
 
-@admin.route('/camera/detail')
+@admin.route('/detail')
 def camera_show():
     """生成摄像头视频流（MJPEG格式）"""
     camera_id = request.args.get('camera_id', None, type=str)
@@ -173,7 +174,7 @@ def camera_show():
     return render_template('camera.html',camera_id=camera_id,camera_title=camera.get_camera_title())
 
 
-@admin.route('/camera/frames')
+@admin.route('/frames')
 def camera_frames():
     """生成摄像头视频流（MJPEG格式）"""
     camera_id = request.args.get('camera_id', None, type=str)
@@ -196,7 +197,7 @@ def camera_frames():
     
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@admin.route('/camera/process', methods=['GET','POST'])
+@admin.route('/process', methods=['GET','POST'])
 def camera_process():
     try:
         camera_id = request.args.get('camera_id', None, type=str)
@@ -236,7 +237,7 @@ def camera_process():
             'success': False
         }), 500
 
-@admin.route('/camera/start', methods=['GET'])
+@admin.route('/start', methods=['GET'])
 def start_camera():
     try:
         camera_id = request.args.get('camera_id', None, type=str)
@@ -246,8 +247,8 @@ def start_camera():
         if(camera is None):
             return "摄像头不存在", 404
         
-        proc = camera_mgr.get_process_by_name("gesture")
-        camera.set_process(proc)
+        # proc = camera_mgr.get_process_by_name("gesture")
+        # camera.set_process(proc)
         success = camera.start_camera()
         
         return jsonify({
@@ -263,7 +264,7 @@ def start_camera():
             'success': False
         }), 500
 
-@admin.route('/camera/stop', methods=['GET'])
+@admin.route('/stop', methods=['GET'])
 def stop_video_detection():
     try:
         camera_id = request.args.get('camera_id', None, type=str)
@@ -287,7 +288,7 @@ def stop_video_detection():
             'success': False
         }), 500
 
-@admin.route('/camera/result', methods=['GET'])
+@admin.route('/result', methods=['GET'])
 def get_video_result():
     try:
         camera_id = request.args.get('camera_id', None, type=str)
@@ -297,6 +298,8 @@ def get_video_result():
         if(camera is None):
             return "摄像头不存在", 404
         result = camera.get_camera_result()
+        if(result is None):
+            return jsonify({})
         return jsonify(result)
         
     except Exception as e:
@@ -304,8 +307,38 @@ def get_video_result():
             'error': str(e),
             'success': False
         }), 500
+    
+@admin.route('/trigger_process_result', methods=['GET','POST'])
+def trigger_process_result():
+    # trigger camera start (if not run),
+    try:
+        camera_id = request.args.get('camera_id', None, type=str)
+        if(camera_id is None or camera_id==""):
+            return "no camera_id input", 400
+        proc_n = request.args.get('process', None, type=str)
+        if(proc_n is None or proc_n==""):
+            return "no process input", 400
+        camera = camera_mgr.get_camera(camera_id)
+        if(camera is None):
+            return "no camera", 404
+        period_sec = request.args.get("period",5.0,type=float)
+        if period_sec<=0:
+            period_sec = 5.0
+        
+        _,result = camera.trigger_process_period_ret(proc_n,period_sec)
+        
+        if(result is None):
+            return jsonify({})
+        return jsonify(result)
+    
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
 
-@admin.route('/camera/status', methods=['GET'])
+@admin.route('/status', methods=['GET'])
 def stream_status():
     camera_id = request.args.get('camera_id', None, type=str)
     if(camera_id is None):
